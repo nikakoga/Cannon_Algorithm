@@ -3,12 +3,12 @@
 #include <stdlib.h>
 #include <time.h>
 
-// gcc generator.c -o executable
+// gcc macierz.c -o executable
 const int sizeOfMainMatrix = 3;
 const int sizeOfMiniMatrix = 3; // it have to bo a square. So 3 means 3 rows and 3 columns = 9 cells inside.
 const int placeForOneNumber = 2;
 
-void readMyPartOfMatrixFromFile(const char *fileName, const int procesID)
+void readMyPartOfMatrixFromFile(const char *fileName, const int procesID, int localMatrix[sizeOfMiniMatrix][sizeOfMiniMatrix])
 {
     FILE *fileMatrix = fopen(fileName, "r");
 
@@ -23,33 +23,40 @@ void readMyPartOfMatrixFromFile(const char *fileName, const int procesID)
     int startRow = (procesID/sizeOfMainMatrix) * rowsToRead; //it is an int so for ex 4/3=1, 2/3=0 so process 4 start in 1st row and proces 2 start in row 0
     int startColumn = (procesID%sizeOfMainMatrix)* (sizeOfMiniMatrix * placeForOneNumber);
 
-    //char line[sizeOfMainMatrix*sizeOfMiniMatrix*placeForOneNumber]; //this is how many information I have in one line of matrix
-
     fseek(fileMatrix, startRow * (sizeOfMainMatrix * sizeOfMiniMatrix* placeForOneNumber +1), SEEK_SET); // +1 bo znak konca nowej linii
     fseek(fileMatrix, startColumn, SEEK_CUR);
 
-    int localMatrix[sizeOfMiniMatrix][sizeOfMiniMatrix];
 
-    int scanned[3];
-
-    fscanf(fileMatrix, "%d%d%d",&scanned[0],&scanned[1],&scanned[2]);
-    printf("Zeskanowana liczba to %d %d %d\n",scanned[0],scanned[1],scanned[2]);
-
-    for (int i=startRow+1; i<(startRow+rowsToRead); i++)
+    for (int i=0; i<rowsToRead; i++)
     {
-        // for(int j=0; j<sizeOfMiniMatrix; j++)
-        // {
-            
-        // }
-
+        for(int j=0; j<sizeOfMiniMatrix; j++)
+        {
+            fscanf(fileMatrix, "%d", &localMatrix[i][j]);
+        }
         fseek(fileMatrix, (sizeOfMainMatrix * sizeOfMiniMatrix* placeForOneNumber +1 -(sizeOfMiniMatrix*placeForOneNumber)), SEEK_CUR);
-        fscanf(fileMatrix, "%d%d%d",&scanned[0],&scanned[1],&scanned[2]);
-        printf("Zeskanowana liczba to %d %d %d\n",scanned[0],scanned[1],scanned[2]);
-
     }
-
 }
 
+void saveLocalMatrixToFile(int localMatrix[sizeOfMiniMatrix][sizeOfMiniMatrix])
+{
+    FILE *fileMatrix = fopen("LocalMatrix.txt", "w");
+
+    if (fileMatrix == NULL)
+    {
+        printf("Error while file opening\n");
+        return;
+    }
+
+    for (int row = 0; row < sizeOfMiniMatrix; row++)
+    {
+        for (int column = 0; column < sizeOfMiniMatrix; column++)
+        {
+            fprintf(fileMatrix, "%*d", placeForOneNumber, localMatrix[row][column]);
+        }
+        fprintf(fileMatrix, "\n");
+    }
+    fclose(fileMatrix);
+}
 
 int main(int argc, char *argv[])
 {
@@ -67,7 +74,9 @@ int main(int argc, char *argv[])
     //     return 0;
     // }
 
-    readMyPartOfMatrixFromFile("Matrix_A.txt",7);
+    int localMatrix[sizeOfMiniMatrix][sizeOfMiniMatrix];
+    readMyPartOfMatrixFromFile("Matrix_A.txt",8, localMatrix);
+    saveLocalMatrixToFile(localMatrix);
 
     // MPI_Finalize();
     return 0;
