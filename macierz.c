@@ -148,6 +148,39 @@ void prepareResultMatrix(int result[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfM
     memset(result, 0, size * size * sizeof(int));
 }
 
+void multiplyMatrices(int matrixA[sizeOfMiniMatrix][sizeOfMiniMatrix], int matrixB[sizeOfMiniMatrix][sizeOfMiniMatrix], int matrixC[sizeOfMiniMatrix][sizeOfMiniMatrix]) {
+    
+    // schemat ikj
+    for (int i = 0; i < sizeOfMiniMatrix; i++) {
+        for (int j = 0; j < sizeOfMiniMatrix; j++) {
+            matrixC[i][j] = 0; //zerowanie tej macierzy bo tam mogą być śmieci z pamięci
+            for (int k = 0; k < sizeOfMiniMatrix; k++) {
+                matrixC[i][j] += matrixA[i][k] * matrixB[k][j];
+            }
+        }
+    }
+
+    // //Schemat ijk
+    // for(int i = 0; i < m; i++)
+    // {
+    //     for(int j = 0; j < m; j++)
+    //     {
+    //         for(int k = 0; k < m; k++)
+    //             C_matrix[i][j] += A_matrix[i][k]*B_matrix[k][j];
+    //     }
+    // }
+
+    //     //Schemat ikj
+    // for(int i = 0; i < m; i++)
+    // {
+    //     for(int k = 0; k < m; k++)
+    //     {
+    //         for(int j = 0; j < m; j++)
+    //             C_matrix[i][j] += A_matrix[i][k]*B_matrix[k][j];
+    //     }
+    // }
+}
+
 int main(int argc, char *argv[])
 {
 
@@ -188,28 +221,43 @@ int main(int argc, char *argv[])
         // prepareResultMatrix(result, sizeOfMainMatrix*sizeOfMiniMatrix);
         // saveLocalMatrixToFile("Result.txt",result);
 
-        // TO CO U INNYCH
-        int matrixA[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
-        int matrixB[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
-        readBothMatrixFromFile("Matrix_A.txt", "Matrix_B.txt", matrixA, matrixB);
+        // int matrixA[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
+        // int matrixB[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
+        // readBothMatrixFromFile("Matrix_A.txt", "Matrix_B.txt", matrixA, matrixB);
 
-        save("A.txt", matrixA);
-        save("B.txt", matrixB);
+        // save("A.txt", matrixA);
+        // save("B.txt", matrixB);
 
-        splitAndSendMatrixForProcesses(size, matrixA, matrixB);
+        // splitAndSendMatrixForProcesses(size, matrixA, matrixB);
+        
+        int personalMatrixC[sizeOfMiniMatrix][sizeOfMiniMatrix];
+        multiplyMatrices(personalMatrixA, personalMatrixB, personalMatrixC);
+
+        sprintf(fileName, "Matrix_C_%d.txt", rank);
+        saveLocalMatrixToFile(fileName, personalMatrixC);
 
     }
 
     else
     {
-        MPI_Recv(&personalMatrixA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        MPI_Recv(&personalMatrixB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        readMyPartOfMatrixFromFile("Matrix_A.txt", rank, personalMatrixA);
+        readMyPartOfMatrixFromFile("Matrix_B.txt", rank, personalMatrixB);
+
+        // MPI_Recv(&personalMatrixA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        // MPI_Recv(&personalMatrixB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
         sprintf(fileName, "Matrix_A_%d.txt", rank);
         saveLocalMatrixToFile(fileName, personalMatrixA);
 
         sprintf(fileName, "Matrix_B_%d.txt", rank);
         saveLocalMatrixToFile(fileName, personalMatrixB);
+
+        int personalMatrixC[sizeOfMiniMatrix][sizeOfMiniMatrix];
+        multiplyMatrices(personalMatrixA, personalMatrixB, personalMatrixC);
+
+        sprintf(fileName, "Matrix_C_%d.txt", rank);
+        saveLocalMatrixToFile(fileName, personalMatrixC);
     }
 
     MPI_Finalize();
