@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <time.h>
 
-const int sizeOfMainMatrix = 3; // it have to be a square root from number of process in a program. 9 processes = size of Main Matrix 3 
-const int sizeOfMiniMatrix = 2; // 2x2 matrix inside every process 
+const int sizeOfMainMatrix = 2; // it have to be a square root from number of process in a program. 9 processes = size of Main Matrix 3 
+const int sizeOfMiniMatrix = 3; // 2x2 matrix inside every process 
 int placeForOneNumber = 3;
 
 void createMatrix(int sizeOfMainMatrix, int sizeOfMiniMatrix, int range, int matrix[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix])
