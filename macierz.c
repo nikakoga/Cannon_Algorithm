@@ -5,7 +5,7 @@
 #include <string.h>
 
 // gcc macierz.c -o executable
-const int sizeOfMainMatrix = 4;
+const int sizeOfMainMatrix = 3;
 const int sizeOfMiniMatrix = 3; // it have to bo a square. So 3 means 3 rows and 3 columns = 9 cells inside.
 const int placeForOneNumber = 6;
 
@@ -46,7 +46,7 @@ void readBothMatrixFromFile(const char *fileNameA, const char *fileNameB, int ma
 
     if (fileNameA == NULL || fileNameB == NULL)
     {
-        printf("Blad otwarcia pliku\n");
+        printf("Error while file opening\n");
         MPI_Finalize();
         return;
     }
@@ -83,7 +83,7 @@ void saveLocalMatrixToFile(const char *fileName, int localMatrix[sizeOfMiniMatri
     fclose(fileMatrix);
 }
 
-void save(const char *fileName, int localMatrix[sizeOfMiniMatrix * sizeOfMainMatrix][sizeOfMiniMatrix * sizeOfMainMatrix])
+void save(const char *fileName, int wholeMatrix[sizeOfMiniMatrix * sizeOfMainMatrix][sizeOfMiniMatrix * sizeOfMainMatrix])
 {
     FILE *fileMatrix = fopen(fileName, "w");
 
@@ -97,7 +97,7 @@ void save(const char *fileName, int localMatrix[sizeOfMiniMatrix * sizeOfMainMat
     {
         for (int column = 0; column < (sizeOfMiniMatrix * sizeOfMainMatrix); column++)
         {
-            fprintf(fileMatrix, "%*d", placeForOneNumber, localMatrix[row][column]);
+            fprintf(fileMatrix, "%*d", placeForOneNumber, wholeMatrix[row][column]);
         }
         fprintf(fileMatrix, "\n");
     }
@@ -112,7 +112,6 @@ void multiplyMatrices(int matrixA[sizeOfMiniMatrix][sizeOfMiniMatrix], int matri
     {
         for (int j = 0; j < sizeOfMiniMatrix; j++)
         {
-            matrixC[i][j] = 0; // zerowanie tej macierzy bo tam mogą być śmieci z pamięci
             for (int k = 0; k < sizeOfMiniMatrix; k++)
             {
                 matrixC[i][j] += matrixA[i][k] * matrixB[k][j];
@@ -192,7 +191,7 @@ void sendFirstLocalMatrixForProcesses(int processNumber, int matrixA[sizeOfMainM
             }
         }
 
-        MPI_Send(sendBuffer_A, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, (helpMatrix[myRow][(myColumn + myRow) % sizeOfMainMatrix]), 0, MPI_COMM_WORLD); // prawy_sasiad = m[i][(j+1) % n]
+        MPI_Send(sendBuffer_A, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, (helpMatrix[myRow][(myColumn + myRow) % sizeOfMainMatrix]), 0, MPI_COMM_WORLD);    // prawy_sasiad = m[i][(j+1) % n]
         MPI_Send(sendBuffer_B, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, (helpMatrix[(myRow + myColumn) % sizeOfMainMatrix][myColumn]), 1, MPI_COMM_WORLD); // dolny_sasiad = m[(i+1) % n][j]
     }
 }
@@ -217,10 +216,10 @@ void shiftSendAndMultiply(int procesID, int personalMatrixA[sizeOfMiniMatrix][si
     MPI_Request req1[sizeOfMiniMatrix], req2[sizeOfMiniMatrix];
     MPI_Request reqS1[sizeOfMiniMatrix], reqS2[sizeOfMiniMatrix];
 
-    for (int step = 0; step < sizeOfMainMatrix; step++)
+    char fileName[50];
+
+    for (int step = 0; step < sizeOfMainMatrix - 1; step++)
     {
-        // Mnożenie macierzy
-        multiplyMatrices(personalMatrixA, personalMatrixB, personalMatrixC);
 
         int leftNeighbor = (MyIDinRow - 1 + sizeOfMainMatrix) % sizeOfMainMatrix;
         int rightNeighbor = (MyIDinRow + 1) % sizeOfMainMatrix;
@@ -228,10 +227,10 @@ void shiftSendAndMultiply(int procesID, int personalMatrixA[sizeOfMiniMatrix][si
         int bottomNeigbor = (MyIDinColumn + 1) % sizeOfMainMatrix;
 
         // Wysyłanie i odbieranie wyników
-        MPI_Irecv(receivedA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, rightNeighbor, 0, rowCommunicator, &req1[step]);
-        MPI_Irecv(receivedB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, bottomNeigbor, 0, colCommunicator, &req2[step]);
-        MPI_Isend(personalMatrixA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, leftNeighbor, 0, rowCommunicator, &reqS1[step]);
-        MPI_Isend(personalMatrixB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, topNeighbor, 0, colCommunicator, &reqS2[step]);
+        MPI_Irecv(receivedA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, leftNeighbor, 0, rowCommunicator, &req1[step]);
+        MPI_Irecv(receivedB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, topNeighbor, 0, colCommunicator, &req2[step]);
+        MPI_Isend(personalMatrixA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, rightNeighbor, 0, rowCommunicator, &reqS1[step]);
+        MPI_Isend(personalMatrixB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, bottomNeigbor, 0, colCommunicator, &reqS2[step]);
 
         // Oczekiwanie na macierze
         MPI_Wait(&req1[step], MPI_STATUS_IGNORE);
@@ -241,24 +240,32 @@ void shiftSendAndMultiply(int procesID, int personalMatrixA[sizeOfMiniMatrix][si
 
         copyMatrix(receivedA, personalMatrixA);
         copyMatrix(receivedB, personalMatrixB);
+
+        // Mnożenie macierzy
+        multiplyMatrices(personalMatrixA, personalMatrixB, personalMatrixC);
+
+        // sprintf(fileName, "Matrix_A_%d_%d.txt", procesID, step);
+        // saveLocalMatrixToFile(fileName, personalMatrixA);
+
+        // sprintf(fileName, "Matrix_B_%d_%d.txt", procesID, step);
+        // saveLocalMatrixToFile(fileName, personalMatrixB);
+
+        // sprintf(fileName, "Matrix_C_%d_%d.txt", procesID, step);
+        // saveLocalMatrixToFile(fileName, personalMatrixC);
     }
 }
 
-void createResult(int result[sizeOfMainMatrix*sizeOfMiniMatrix][sizeOfMainMatrix*sizeOfMiniMatrix], int processNumber)
+void createResult(int result[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix], int processNumber)
 {
     int localMatrixC[sizeOfMiniMatrix][sizeOfMiniMatrix];
-    for(int procesID = 0; procesID < processNumber; procesID++)
+    for (int procesID = 0; procesID < processNumber; procesID++)
     {
         MPI_Recv(&localMatrixC, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, procesID, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        printf("Odebralam od procesu %d\n", procesID);
 
         int startRow = (procesID / sizeOfMainMatrix) * sizeOfMiniMatrix;
         int startColumn = (procesID % sizeOfMainMatrix) * sizeOfMiniMatrix;
-        //int myRow = procesID / sizeOfMainMatrix;
-        //int myColumn = procesID % sizeOfMainMatrix;
 
         // Wypełnienie bufora danymi z macierzy A i B dla danego procesu
-        printf("startrow %d, size %d\n", startRow, sizeOfMiniMatrix);
         for (int row = startRow; row < startRow + sizeOfMiniMatrix; row++)
         {
             for (int col = startColumn; col < startColumn + sizeOfMiniMatrix; col++)
@@ -267,6 +274,10 @@ void createResult(int result[sizeOfMainMatrix*sizeOfMiniMatrix][sizeOfMainMatrix
             }
         }
     }
+}
+
+int checkResultWithFileFromSequencer(int result[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix])
+{
     
 }
 
@@ -290,8 +301,9 @@ int main(int argc, char *argv[])
     // printf("Czas obliczen = %f\n", endwtime - startwtime);
 
     int personalMatrixA[sizeOfMiniMatrix][sizeOfMiniMatrix];
-
     int personalMatrixB[sizeOfMiniMatrix][sizeOfMiniMatrix];
+    memset(personalMatrixA, 0, sizeOfMainMatrix * sizeOfMiniMatrix * sizeOfMainMatrix * sizeOfMiniMatrix * sizeof(int));
+    memset(personalMatrixB, 0, sizeOfMainMatrix * sizeOfMiniMatrix * sizeOfMainMatrix * sizeOfMiniMatrix * sizeof(int));
 
     if (rank == 0)
     {
@@ -312,31 +324,34 @@ int main(int argc, char *argv[])
     }
 
     int personalMatrixC[sizeOfMiniMatrix][sizeOfMiniMatrix];
+    memset(personalMatrixC, 0, sizeOfMiniMatrix * sizeOfMiniMatrix * sizeof(int));
     char fileName[50];
 
-    // sprintf(fileName, "Matrix_A_%d.txt", rank);
+    // sprintf(fileName, "Matrix_A_%d_0_START.txt", rank);
     // saveLocalMatrixToFile(fileName, personalMatrixA);
 
-    // sprintf(fileName, "Matrix_B_%d.txt", rank);
+    // sprintf(fileName, "Matrix_B_%d_0_START.txt", rank);
     // saveLocalMatrixToFile(fileName, personalMatrixB);
 
     // mnozenie macierzy ktore zostaly odpowiednio przemieszczone juz podczas pierwszego rozeslania
     multiplyMatrices(personalMatrixA, personalMatrixB, personalMatrixC);
+    // sprintf(fileName, "Matrix_C_%d_0_START.txt", rank);
+    // saveLocalMatrixToFile(fileName, personalMatrixC);
 
     // kolejne przemieszczenia macierzy i mnożenia
     shiftSendAndMultiply(rank, personalMatrixA, personalMatrixB, personalMatrixC);
 
-    // lokalny wynik
-    // sprintf(fileName, "Matrix_C_%d.txt", rank);
+    // // lokalny wynik
+    // sprintf(fileName, "Matrix_C_%d_FINISH.txt", rank);
     // saveLocalMatrixToFile(fileName, personalMatrixC);
 
-    MPI_Send(personalMatrixC, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, 0, 0, MPI_COMM_WORLD);// wyslij do procesu 0 koncowa macierz
+    MPI_Send(personalMatrixC, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, 0, 0, MPI_COMM_WORLD); // wyslij do procesu 0 koncowa macierz
 
-    if(rank==0)
-    {  
-        int result[sizeOfMainMatrix*sizeOfMiniMatrix][sizeOfMainMatrix*sizeOfMiniMatrix];
-        createResult(result,size);
-        save("Result.txt",result);
+    if (rank == 0)
+    {
+        int result[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
+        createResult(result, size);
+        save("ResultFromCannon.txt", result);
     }
 
     MPI_Finalize();
