@@ -1,13 +1,12 @@
 #include <stdio.h>
-// #include <mpi.h>
 #include <stdlib.h>
 #include <time.h>
 
-const int sizeOfMainMatrix = 4; // it have to be a square root from number of process in a program. 9 processes = size of Main Matrix 3 
-const int sizeOfMiniMatrix = 3; // 2x2 matrix inside every process 
+const int sizeOfMainMatrix = 3; // it have to be a square root from number of process in a program. 9 processes = size of Main Matrix 3 
+const int sizeOfMiniMatrix = 4; // 2x2 matrix inside every process 
 int placeForOneNumber = 6;
 
-void createMatrix(int sizeOfMainMatrix, int sizeOfMiniMatrix, int range, int matrix[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix])
+void createMatrix(int sizeOfMainMatrix, int sizeOfMiniMatrix, int range, float matrix[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix])
 {
     for (int row = 0; row < (sizeOfMiniMatrix * sizeOfMainMatrix); row++)
     {
@@ -18,7 +17,7 @@ void createMatrix(int sizeOfMainMatrix, int sizeOfMiniMatrix, int range, int mat
     }
 }
 
-void saveToFile(const char *fileName, int matrix[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix])
+void saveToFile(const char *fileName, float matrix[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix])
 {
    FILE *fileMatrix = fopen(fileName, "w");
 
@@ -32,7 +31,7 @@ void saveToFile(const char *fileName, int matrix[sizeOfMainMatrix * sizeOfMiniMa
     {
         for (int column = 0; column < (sizeOfMiniMatrix * sizeOfMainMatrix); column++)
         {
-            fprintf(fileMatrix, "%*d", placeForOneNumber, matrix[row][column]);
+            fprintf(fileMatrix, "%6.1f", matrix[row][column]); //placeForOneNumber
         }
         fprintf(fileMatrix, "\n");
     }
@@ -44,11 +43,11 @@ int main(int argc, char *argv[])
 {
     srand(time(NULL));
 
-    int matrix_A[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
+    float matrix_A[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
     createMatrix(sizeOfMainMatrix, sizeOfMiniMatrix, 10, matrix_A);
     saveToFile("Matrix_A.txt", matrix_A);
 
-    int matrix_B[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
+    float matrix_B[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
     createMatrix(sizeOfMainMatrix, sizeOfMiniMatrix, 10, matrix_B);
     saveToFile("Matrix_B.txt", matrix_B);
 }
