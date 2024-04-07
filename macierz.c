@@ -178,6 +178,22 @@ void sendFirstLocalMatrixForProcesses(int processNumber, int matrixA[sizeOfMainM
         int myRow = processID / sizeOfMainMatrix;
         int myColumn = processID % sizeOfMainMatrix;
 
+        int leftNeighbor = helpMatrix[myRow][(sizeOfMainMatrix- myRow + myColumn )%sizeOfMainMatrix]; // Dodajemy sizeOfMainMatrix, aby zapewnić, że wynik jest nieujemny
+        int topNeighbor = helpMatrix[(sizeOfMainMatrix+ myRow - myColumn )%sizeOfMainMatrix][myColumn];
+
+        // Jeśli indeks kolumny jest równy 0, przesuwamy się na ostatnią kolumnę
+        if (myColumn == 0)
+        {
+            topNeighbor = processID;
+            leftNeighbor = helpMatrix[myRow][sizeOfMainMatrix-myRow];
+        }
+
+        if (myRow == 0) // procesow z rzedu 0 nie tykamy
+        {
+            leftNeighbor = processID;
+            topNeighbor = helpMatrix[sizeOfMainMatrix-myColumn][myColumn];
+        }
+
         int index = 0;
 
         // Wypełnienie bufora danymi z macierzy A i B dla danego procesu
@@ -191,8 +207,12 @@ void sendFirstLocalMatrixForProcesses(int processNumber, int matrixA[sizeOfMainM
             }
         }
 
-        MPI_Send(sendBuffer_A, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, (helpMatrix[myRow][(myColumn + myRow) % sizeOfMainMatrix]), 0, MPI_COMM_WORLD);    // prawy_sasiad = m[i][(j+1) % n]
-        MPI_Send(sendBuffer_B, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, (helpMatrix[(myRow + myColumn) % sizeOfMainMatrix][myColumn]), 1, MPI_COMM_WORLD); // dolny_sasiad = m[(i+1) % n][j]
+        // MPI_Send(sendBuffer_A, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, (helpMatrix[myRow][(myColumn + myRow) % sizeOfMainMatrix]), 0, MPI_COMM_WORLD);    // prawy_sasiad = m[i][(j+1) % n]
+        // MPI_Send(sendBuffer_B, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, (helpMatrix[(myRow + myColumn) % sizeOfMainMatrix][myColumn]), 1, MPI_COMM_WORLD); // dolny_sasiad = m[(i+1) % n][j]
+        printf("Jestem %d Wysylam do gory do %d\n", processID, topNeighbor);
+        printf("Jestem %d Wysylam na lewo do %d\n", processID, leftNeighbor);
+        MPI_Send(sendBuffer_A, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, leftNeighbor, 0, MPI_COMM_WORLD); // prawy_sasiad = m[i][(j+1) % n]
+        MPI_Send(sendBuffer_B, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, topNeighbor, 1, MPI_COMM_WORLD);  // dolny_sasiad = m[(i+1) % n][j]
     }
 }
 
@@ -227,10 +247,15 @@ void shiftSendAndMultiply(int procesID, int personalMatrixA[sizeOfMiniMatrix][si
         int bottomNeigbor = (MyIDinColumn + 1) % sizeOfMainMatrix;
 
         // Wysyłanie i odbieranie wyników
-        MPI_Irecv(receivedA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, leftNeighbor, 0, rowCommunicator, &req1[step]);
-        MPI_Irecv(receivedB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, topNeighbor, 0, colCommunicator, &req2[step]);
-        MPI_Isend(personalMatrixA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, rightNeighbor, 0, rowCommunicator, &reqS1[step]);
-        MPI_Isend(personalMatrixB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, bottomNeigbor, 0, colCommunicator, &reqS2[step]);
+        // MPI_Irecv(receivedA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, leftNeighbor, 0, rowCommunicator, &req1[step]);
+        // MPI_Irecv(receivedB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, topNeighbor, 0, colCommunicator, &req2[step]);
+        // MPI_Isend(personalMatrixA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, rightNeighbor, 0, rowCommunicator, &reqS1[step]);
+        // MPI_Isend(personalMatrixB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, bottomNeigbor, 0, colCommunicator, &reqS2[step]);
+
+        MPI_Irecv(receivedA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, rightNeighbor, 0, rowCommunicator, &req1[step]);
+        MPI_Irecv(receivedB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, bottomNeigbor, 0, colCommunicator, &req2[step]);
+        MPI_Isend(personalMatrixA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, leftNeighbor, 0, rowCommunicator, &reqS1[step]);
+        MPI_Isend(personalMatrixB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_INT, topNeighbor, 0, colCommunicator, &reqS2[step]);
 
         // Oczekiwanie na macierze
         MPI_Wait(&req1[step], MPI_STATUS_IGNORE);
@@ -278,7 +303,31 @@ void createResult(int result[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatr
 
 int checkResultWithFileFromSequencer(int result[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix])
 {
-    
+    FILE *sequencerFile = fopen("ResultFromSequencer.txt", "r");
+    int sequencerMatrix[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
+
+    for (int row = 0; row < sizeOfMainMatrix * sizeOfMiniMatrix; row++)
+    {
+        for (int col = 0; col < sizeOfMainMatrix * sizeOfMiniMatrix; col++)
+        {
+            fscanf(sequencerFile, "%d", &sequencerMatrix[row][col]);
+        }
+    }
+    // Sprawdzenie poprawności
+    int correct_result = 1;
+    for (int row = 0; row < sizeOfMainMatrix * sizeOfMiniMatrix; row++)
+    {
+        for (int col = 0; col < sizeOfMainMatrix * sizeOfMiniMatrix; col++)
+        {
+            if (sequencerMatrix[row][col] / result[row][col] >= 1.1 || sequencerMatrix[row][col] / result[row][col] <= 0.9)
+            {
+                return -1;
+            }
+        }
+    }
+
+    return 1;
+    fclose(sequencerFile);
 }
 
 int main(int argc, char *argv[])
