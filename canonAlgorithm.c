@@ -7,7 +7,7 @@
 
 // gcc macierz.c -o executable
 const int sizeOfMainMatrix = 3;
-const int sizeOfMiniMatrix = 4; // it have to bo a square. So 3 means 3 rows and 3 columns = 9 cells inside.
+const int sizeOfMiniMatrix = 4;
 const int placeForOneNumber = 6;
 
 void readMyPartOfMatrixFromFile(const char *fileName, const int procesID, float localMatrix[sizeOfMiniMatrix][sizeOfMiniMatrix])
@@ -21,14 +21,15 @@ void readMyPartOfMatrixFromFile(const char *fileName, const int procesID, float 
         return;
     }
 
-    int rowsPerProcess = sizeOfMiniMatrix;
-    int startRow = (procesID / sizeOfMainMatrix) * rowsPerProcess; // it is an int so for ex 4/3=1, 2/3=0 so process 4 start in 1st row and proces 2 start in row 0
-    int startColumn = (procesID % sizeOfMainMatrix) * (sizeOfMiniMatrix * placeForOneNumber);
+    int myRow = procesID / sizeOfMainMatrix;
+    int myColumn = procesID % sizeOfMainMatrix;
+    int startRow = (procesID / sizeOfMainMatrix) * sizeOfMiniMatrix + (sizeOfMiniMatrix * placeForOneNumber*myColumn);
+    int startColumn = (procesID % sizeOfMainMatrix) * (sizeOfMiniMatrix * placeForOneNumber) + (sizeOfMiniMatrix * placeForOneNumber*myRow);
 
     fseek(fileMatrix, startRow * (sizeOfMainMatrix * sizeOfMiniMatrix * placeForOneNumber + 1), SEEK_SET); // +1 bo znak konca nowej linii
     fseek(fileMatrix, startColumn, SEEK_CUR);
 
-    for (int i = 0; i < rowsPerProcess; i++)
+    for (int i = 0; i < sizeOfMiniMatrix; i++)
     {
         for (int j = 0; j < sizeOfMiniMatrix; j++)
         {
@@ -40,7 +41,19 @@ void readMyPartOfMatrixFromFile(const char *fileName, const int procesID, float 
     // ToDo zbadac czy dodanie fclose cos zmieni dla innych procesow czytajacych z pliku
 }
 
-void readBothMatrixFromFile(const char *fileNameA, const char *fileNameB, float matrixA[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix], float matrixB[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix])
+void getMatrixForProcess0(float wholeMatrix[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix], float myPart[sizeOfMiniMatrix][sizeOfMiniMatrix])
+{
+    for (int i = 0; i < sizeOfMiniMatrix; i++)
+    {
+        for (int j = 0; j < sizeOfMiniMatrix; j++)
+        {
+            myPart[i][j] = wholeMatrix[i][j];
+        }
+    }
+}
+
+void readBothMatrixFromFile(const char *fileNameA, const char *fileNameB, float matrixA[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix],
+                            float matrixB[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix])
 {
     FILE *fileMatrixA = fopen(fileNameA, "r");
     FILE *fileMatrixB = fopen(fileNameB, "r");
@@ -63,28 +76,7 @@ void readBothMatrixFromFile(const char *fileNameA, const char *fileNameB, float 
     fclose(fileMatrixB);
 }
 
-void saveLocalMatrixToFile(const char *fileName, float localMatrix[sizeOfMiniMatrix][sizeOfMiniMatrix])
-{
-    FILE *fileMatrix = fopen(fileName, "w");
-
-    if (fileMatrix == NULL)
-    {
-        printf("Error while file opening\n");
-        return;
-    }
-
-    for (int row = 0; row < sizeOfMiniMatrix; row++)
-    {
-        for (int column = 0; column < sizeOfMiniMatrix; column++)
-        {
-            fprintf(fileMatrix, "%6.1f", localMatrix[row][column]); // placeForOneNumber
-        }
-        fprintf(fileMatrix, "\n");
-    }
-    fclose(fileMatrix);
-}
-
-void save(const char *fileName, float wholeMatrix[sizeOfMiniMatrix * sizeOfMainMatrix][sizeOfMiniMatrix * sizeOfMainMatrix])
+void saveMatrixToFile(const char *fileName, float wholeMatrix[sizeOfMiniMatrix * sizeOfMainMatrix][sizeOfMiniMatrix * sizeOfMainMatrix])
 {
     FILE *fileMatrix = fopen(fileName, "w");
 
@@ -105,7 +97,8 @@ void save(const char *fileName, float wholeMatrix[sizeOfMiniMatrix * sizeOfMainM
     fclose(fileMatrix);
 }
 
-void multiplyMatrices(float matrixA[sizeOfMiniMatrix][sizeOfMiniMatrix], float matrixB[sizeOfMiniMatrix][sizeOfMiniMatrix], float matrixC[sizeOfMiniMatrix][sizeOfMiniMatrix])
+void multiplyMatrices(float matrixA[sizeOfMiniMatrix][sizeOfMiniMatrix], float matrixB[sizeOfMiniMatrix][sizeOfMiniMatrix],
+                      float matrixC[sizeOfMiniMatrix][sizeOfMiniMatrix])
 {
     // schemat ikj
     for (int i = 0; i < sizeOfMiniMatrix; i++)
@@ -131,7 +124,8 @@ void copyMatrix(float source[sizeOfMiniMatrix][sizeOfMiniMatrix], float destinat
     }
 }
 
-void sendFirstLocalMatrixForProcesses(int processNumber, float matrixA[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix], float matrixB[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix])
+void sendFirstLocalMatrixForProcesses(int processNumber, float matrixA[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix],
+                                      float matrixB[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix])
 {
     // Przygotowanie bufora do wysłania
     float sendBuffer_A[sizeOfMiniMatrix * sizeOfMiniMatrix];
@@ -152,13 +146,14 @@ void sendFirstLocalMatrixForProcesses(int processNumber, float matrixA[sizeOfMai
     for (int processID = 1; processID < processNumber; processID++)
     {
         // Obliczenie indeksów początkowych wierszy dla danego procesu
-        int startRow = (processID / sizeOfMainMatrix) * sizeOfMiniMatrix; // it is an int so for ex 4/3=1, 2/3=0 so process 4 start in 1st row and proces 2 start in row 0
+        int startRow = (processID / sizeOfMainMatrix) * sizeOfMiniMatrix;
         int startColumn = (processID % sizeOfMainMatrix) * sizeOfMiniMatrix;
         int myRow = processID / sizeOfMainMatrix;
         int myColumn = processID % sizeOfMainMatrix;
 
-        int leftNeighbor = helpMatrix[myRow][(sizeOfMainMatrix - myRow + myColumn) % sizeOfMainMatrix]; // Dodajemy sizeOfMainMatrix, aby zapewnić, że wynik jest nieujemny
+        int leftNeighbor = helpMatrix[myRow][(sizeOfMainMatrix - myRow + myColumn) % sizeOfMainMatrix];
         int topNeighbor = helpMatrix[(sizeOfMainMatrix + myRow - myColumn) % sizeOfMainMatrix][myColumn];
+
 
         // Jeśli indeks kolumny jest równy 0, przesuwamy się na ostatnią kolumnę
         if (myColumn == 0)
@@ -185,13 +180,13 @@ void sendFirstLocalMatrixForProcesses(int processNumber, float matrixA[sizeOfMai
                 index++;
             }
         }
-
-        MPI_Send(sendBuffer_A, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, leftNeighbor, 0, MPI_COMM_WORLD); // prawy_sasiad = m[i][(j+1) % n]
-        MPI_Send(sendBuffer_B, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, topNeighbor, 1, MPI_COMM_WORLD);  // dolny_sasiad = m[(i+1) % n][j]
+        MPI_Send(sendBuffer_A, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, leftNeighbor, 0, MPI_COMM_WORLD);
+        MPI_Send(sendBuffer_B, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, topNeighbor, 1, MPI_COMM_WORLD);
     }
 }
 
-void shiftSendAndMultiply(int procesID, float personalMatrixA[sizeOfMiniMatrix][sizeOfMiniMatrix], float personalMatrixB[sizeOfMiniMatrix][sizeOfMiniMatrix], float personalMatrixC[sizeOfMiniMatrix][sizeOfMiniMatrix])
+void shiftSendAndMultiply(int procesID, float personalMatrixA[sizeOfMiniMatrix][sizeOfMiniMatrix], float personalMatrixB[sizeOfMiniMatrix][sizeOfMiniMatrix],
+                          float personalMatrixC[sizeOfMiniMatrix][sizeOfMiniMatrix])
 {
     // Tworzenie komunikatorów wiersza i kolumny
     MPI_Comm rowCommunicator;
@@ -238,15 +233,6 @@ void shiftSendAndMultiply(int procesID, float personalMatrixA[sizeOfMiniMatrix][
 
         // Mnożenie macierzy
         multiplyMatrices(personalMatrixA, personalMatrixB, personalMatrixC);
-
-        // sprintf(fileName, "Matrix_A_%d_%d.txt", procesID, step);
-        // saveLocalMatrixToFile(fileName, personalMatrixA);
-
-        // sprintf(fileName, "Matrix_B_%d_%d.txt", procesID, step);
-        // saveLocalMatrixToFile(fileName, personalMatrixB);
-
-        // sprintf(fileName, "Matrix_C_%d_%d.txt", procesID, step);
-        // saveLocalMatrixToFile(fileName, personalMatrixC);
     }
 }
 
@@ -295,7 +281,6 @@ int checkResultWithFileFromSequencer(float result[sizeOfMainMatrix * sizeOfMiniM
             }
         }
     }
-
     return 1;
     fclose(sequencerFile);
 }
@@ -307,9 +292,12 @@ int main(int argc, char *argv[])
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    if (size != (sizeOfMainMatrix * sizeOfMainMatrix) && rank == 0)
+    if (size != (sizeOfMainMatrix * sizeOfMainMatrix))
     {
-        printf("Your number of process is incorrect!\nPlease try again on %d processes", sizeOfMainMatrix * sizeOfMainMatrix);
+        if (rank == 0)
+        {
+            printf("Your number of process is incorrect!\nPlease try again on %d processes\n\n", sizeOfMainMatrix * sizeOfMainMatrix);
+        }
         MPI_Finalize();
         return 1;
     }
@@ -323,12 +311,16 @@ int main(int argc, char *argv[])
 
     if (rank == 0)
     {
-        readMyPartOfMatrixFromFile("Matrix_A.txt", rank, personalMatrixA);
-        readMyPartOfMatrixFromFile("Matrix_B.txt", rank, personalMatrixB);
+        // readMyPartOfMatrixFromFile("Matrix_A.txt", rank, personalMatrixA);
+        // readMyPartOfMatrixFromFile("Matrix_B.txt", rank, personalMatrixB);
 
         float matrixA[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
         float matrixB[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
+
         readBothMatrixFromFile("Matrix_A.txt", "Matrix_B.txt", matrixA, matrixB);
+
+        getMatrixForProcess0(matrixA, personalMatrixA);
+        getMatrixForProcess0(matrixB, personalMatrixB);
 
         double startTimer;
         startTimer = MPI_Wtime();
@@ -347,7 +339,7 @@ int main(int argc, char *argv[])
 
         float result[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
         createResult(result, size);
-        save("ResultFromCannon.txt", result);
+        saveMatrixToFile("ResultFromCannon.txt", result);
 
         if (checkResultWithFileFromSequencer(result))
         {

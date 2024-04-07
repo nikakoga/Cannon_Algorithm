@@ -29,7 +29,7 @@ void readBothMatrixFromFile(const char *fileNameA, const char *fileNameB, float 
     fclose(fileMatrixB);
 }
 
-void save(const char *fileName, float wholeMatrix[sizeOfMiniMatrix * sizeOfMainMatrix][sizeOfMiniMatrix * sizeOfMainMatrix])
+void saveMatrixToFile(const char *fileName, float wholeMatrix[sizeOfMiniMatrix * sizeOfMainMatrix][sizeOfMiniMatrix * sizeOfMainMatrix])
 {
     FILE *fileMatrix = fopen(fileName, "w");
 
@@ -106,7 +106,7 @@ int main(int argc, char **argv)
     microseconds = end.tv_usec - begin.tv_usec;
     double ikj = seconds + microseconds * 1e-6;
 
-    save("ResultFromSequencer.txt", matrixC);
+    saveMatrixToFile("ResultFromSequencer.txt", matrixC);
 
     printf("Time for ijk = %f\n", ijk);
     printf("Time for ikj = %f\n", ikj);
