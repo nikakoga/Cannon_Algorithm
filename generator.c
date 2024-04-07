@@ -44,10 +44,10 @@ int main(int argc, char *argv[])
     srand(time(NULL));
 
     float matrix_A[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
-    createMatrix(sizeOfMainMatrix, sizeOfMiniMatrix, 10, matrix_A);
+    createMatrix(sizeOfMainMatrix, sizeOfMiniMatrix, 100, matrix_A);
     saveToFile("Matrix_A.txt", matrix_A);
 
     float matrix_B[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
-    createMatrix(sizeOfMainMatrix, sizeOfMiniMatrix, 10, matrix_B);
+    createMatrix(sizeOfMainMatrix, sizeOfMiniMatrix, 100, matrix_B);
     saveToFile("Matrix_B.txt", matrix_B);
 }
