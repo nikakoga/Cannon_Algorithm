@@ -3,9 +3,15 @@
 #include <sys/time.h>
 #include <string.h>
 
-const int sizeOfMainMatrix = 3; // it have to bo a square. So 3 means 3 rows and 3 columns = 9 cells inside
-const int sizeOfMiniMatrix = 4; // same here
+const int sizeOfMainMatrix = 4;
+const int sizeOfMiniMatrix = 500;
+#define MINISIZE 2000
 const int placeForOneNumber = 6;
+
+float matrixA[MINISIZE][MINISIZE];
+float matrixB[MINISIZE][MINISIZE];
+float matrixC[MINISIZE][MINISIZE];
+
 
 void readBothMatrixFromFile(const char *fileNameA, const char *fileNameB, float matrixA[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix], float matrixB[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix])
 {
@@ -43,7 +49,7 @@ void saveMatrixToFile(const char *fileName, float wholeMatrix[sizeOfMiniMatrix *
     {
         for (int column = 0; column < (sizeOfMiniMatrix * sizeOfMainMatrix); column++)
         {
-            fprintf(fileMatrix, "%6.1f", wholeMatrix[row][column]); // placeForOneNumber
+            fprintf(fileMatrix, "%10.1f", wholeMatrix[row][column]); // placeForOneNumber
         }
         fprintf(fileMatrix, "\n");
     }
@@ -53,10 +59,6 @@ void saveMatrixToFile(const char *fileName, float wholeMatrix[sizeOfMiniMatrix *
 int main(int argc, char **argv)
 {
     // jakby nie dzialalo to macierze static o rozmiarach podanych liczbami
-
-    float matrixA[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
-    float matrixB[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
-    float matrixC[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
 
     FILE *FileResult;
 

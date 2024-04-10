@@ -7,9 +7,28 @@
 #include <math.h>
 
 // gcc macierz.c -o executable
-const int sizeOfMainMatrix = 3;
-const int sizeOfMiniMatrix = 4;
-const int placeForOneNumber = 6;
+// ssh Inf151574@polluks.cs.put.poznan.pl
+// ssh lab-cad-3
+
+#define WHOLEMATRIX 2000
+#define SMOLATRIX 500
+#define BIGATRIX 250000 // SMOLATRIX * SMOLATRIX
+
+const int sizeOfMainMatrix = 4;
+const int sizeOfMiniMatrix = 500;
+const int placeForOneNumber = 10;
+
+static float matrixA[WHOLEMATRIX][WHOLEMATRIX];
+static float matrixB[WHOLEMATRIX][WHOLEMATRIX];
+
+static float personalMatrixA[SMOLATRIX][SMOLATRIX];
+static float personalMatrixB[SMOLATRIX][SMOLATRIX];
+static float personalMatrixC[SMOLATRIX][SMOLATRIX];
+
+static float sendBuffer_A[BIGATRIX];
+static float sendBuffer_B[BIGATRIX];
+
+static float result[WHOLEMATRIX][WHOLEMATRIX];
 
 void getMatrixForProcess0(float wholeMatrix[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix], float myPart[sizeOfMiniMatrix][sizeOfMiniMatrix])
 {
@@ -60,7 +79,7 @@ void saveMatrixToFile(const char *fileName, float wholeMatrix[sizeOfMiniMatrix *
     {
         for (int column = 0; column < (sizeOfMiniMatrix * sizeOfMainMatrix); column++)
         {
-            fprintf(fileMatrix, "%6.1f", wholeMatrix[row][column]); // placeForOneNumber
+            fprintf(fileMatrix, "%10.1f", wholeMatrix[row][column]); // placeForOneNumber
         }
         fprintf(fileMatrix, "\n");
     }
@@ -73,9 +92,9 @@ void multiplyMatrices(float matrixA[sizeOfMiniMatrix][sizeOfMiniMatrix], float m
     // schemat ikj
     for (int i = 0; i < sizeOfMiniMatrix; i++)
     {
-        for (int j = 0; j < sizeOfMiniMatrix; j++)
+        for (int k = 0; k < sizeOfMiniMatrix; k++)
         {
-            for (int k = 0; k < sizeOfMiniMatrix; k++)
+            for (int j = 0; j < sizeOfMiniMatrix; j++)
             {
                 matrixC[i][j] += matrixA[i][k] * matrixB[k][j];
             }
@@ -98,9 +117,6 @@ void sendFirstLocalMatrixForProcesses(int processNumber, float matrixA[sizeOfMai
                                       float matrixB[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix])
 {
     // Przygotowanie bufora do wysłania
-    float sendBuffer_A[sizeOfMiniMatrix * sizeOfMiniMatrix];
-    float sendBuffer_B[sizeOfMiniMatrix * sizeOfMiniMatrix];
-
     int helpMatrix[sizeOfMainMatrix][sizeOfMainMatrix]; // pomocnicza macierz ktora ma w swojej komorce numer procesu. Przesuwam sie po niej i odczytuje wartosc zeby wiedziec do jakiego procesu wysłać po przesunięciu
     int indeks = 0;
 
@@ -149,7 +165,9 @@ void sendFirstLocalMatrixForProcesses(int processNumber, float matrixA[sizeOfMai
                 index++;
             }
         }
+        printf("Proces 0 wysylam do %d\n", leftNeighbor);
         MPI_Send(sendBuffer_A, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, leftNeighbor, 0, MPI_COMM_WORLD);
+        printf("Proces 0 wysylam do %d\n", topNeighbor);
         MPI_Send(sendBuffer_B, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, topNeighbor, 1, MPI_COMM_WORLD);
     }
 }
@@ -157,6 +175,7 @@ void sendFirstLocalMatrixForProcesses(int processNumber, float matrixA[sizeOfMai
 void shiftSendAndMultiply(int procesID, float personalMatrixA[sizeOfMiniMatrix][sizeOfMiniMatrix], float personalMatrixB[sizeOfMiniMatrix][sizeOfMiniMatrix],
                           float personalMatrixC[sizeOfMiniMatrix][sizeOfMiniMatrix])
 {
+    printf("Shift, send and multiply\n");
     // Tworzenie komunikatorów wiersza i kolumny
     MPI_Comm rowCommunicator;
     MPI_Comm colCommunicator;
@@ -229,7 +248,6 @@ void createResult(float result[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMa
 void checkResultWithFileFromSequencer(float result[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix])
 {
     FILE *sequencerFile = fopen("ResultFromSequencer.txt", "r");
-    float sequencerMatrix[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
 
     for (int row = 0; row < sizeOfMainMatrix * sizeOfMiniMatrix; row++)
     {
@@ -272,28 +290,22 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    float personalMatrixA[sizeOfMiniMatrix][sizeOfMiniMatrix];
-    float personalMatrixB[sizeOfMiniMatrix][sizeOfMiniMatrix];
-    float personalMatrixC[sizeOfMiniMatrix][sizeOfMiniMatrix];
-
     memset(personalMatrixC, 0, sizeOfMiniMatrix * sizeOfMiniMatrix * sizeof(float));
     char fileName[50];
 
     if (rank == 0)
     {
 
-        float matrixA[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
-        float matrixB[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
-
         readBothMatrixFromFile("Matrix_A.txt", "Matrix_B.txt", matrixA, matrixB);
 
         getMatrixForProcess0(matrixA, personalMatrixA);
         getMatrixForProcess0(matrixB, personalMatrixB);
 
+        sendFirstLocalMatrixForProcesses(size, matrixA, matrixB);
+
         double startTimer;
         startTimer = MPI_Wtime();
 
-        sendFirstLocalMatrixForProcesses(size, matrixA, matrixB);
         multiplyMatrices(personalMatrixA, personalMatrixB, personalMatrixC);
 
         // kolejne przemieszczenia macierzy i mnożenia
@@ -302,11 +314,11 @@ int main(int argc, char *argv[])
         // wyslij do samego siebie koncowa macierz
         MPI_Send(personalMatrixC, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, 0, 0, MPI_COMM_WORLD);
 
+        createResult(result, size);
+
         double endTimer;
         endTimer = MPI_Wtime();
 
-        float result[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
-        createResult(result, size);
         saveMatrixToFile("ResultFromCannon.txt", result);
 
         checkResultWithFileFromSequencer(result);
@@ -316,8 +328,11 @@ int main(int argc, char *argv[])
 
     else
     {
+        printf("Proces %d czekam na wiadomosc\n", rank);
         MPI_Recv(&personalMatrixA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        printf("Proces %d odebralam pierwsza wiadomosc\n", rank);
         MPI_Recv(&personalMatrixB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        printf("Proces %d odebralam druga wiadomosc\n", rank);
 
         // mnozenie macierzy ktore zostaly odpowiednio przemieszczone juz podczas pierwszego rozeslania
         multiplyMatrices(personalMatrixA, personalMatrixB, personalMatrixC);

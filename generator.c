@@ -2,9 +2,15 @@
 #include <stdlib.h>
 #include <time.h>
 
-const int sizeOfMainMatrix = 3; // it have to be a square root from number of process in a program. 9 processes = size of Main Matrix 3 
-const int sizeOfMiniMatrix = 4; // 2x2 matrix inside every process 
-int placeForOneNumber = 6;
+const int sizeOfMainMatrix = 4;
+const int sizeOfMiniMatrix = 500;
+int placeForOneNumber = 10;
+
+// float matrix_A[16][16];
+// float matrix_B[16][16];
+
+float matrix_A[2000][2000];
+float matrix_B[2000][2000];
 
 void createMatrix(int sizeOfMainMatrix, int sizeOfMiniMatrix, int range, float matrix[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix])
 {
@@ -31,7 +37,7 @@ void saveToFile(const char *fileName, float matrix[sizeOfMainMatrix * sizeOfMini
     {
         for (int column = 0; column < (sizeOfMiniMatrix * sizeOfMainMatrix); column++)
         {
-            fprintf(fileMatrix, "%6.1f", matrix[row][column]); //placeForOneNumber
+            fprintf(fileMatrix, "%10.1f", matrix[row][column]); //placeForOneNumber
         }
         fprintf(fileMatrix, "\n");
     }
@@ -43,11 +49,9 @@ int main(int argc, char *argv[])
 {
     srand(time(NULL));
 
-    float matrix_A[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
     createMatrix(sizeOfMainMatrix, sizeOfMiniMatrix, 100, matrix_A);
     saveToFile("Matrix_A.txt", matrix_A);
 
-    float matrix_B[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix];
     createMatrix(sizeOfMainMatrix, sizeOfMiniMatrix, 100, matrix_B);
     saveToFile("Matrix_B.txt", matrix_B);
 }
