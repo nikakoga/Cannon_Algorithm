@@ -13,8 +13,9 @@
 #define WHOLEMATRIX 2000
 #define SMOLATRIX 500
 #define BIGATRIX 250000 // SMOLATRIX * SMOLATRIX
+#define SQRT_PROCESS_NUM 4
 
-const int sizeOfMainMatrix = 4;
+const int sizeOfMainMatrix = SQRT_PROCESS_NUM;
 const int sizeOfMiniMatrix = 500;
 const int placeForOneNumber = 10;
 
@@ -25,8 +26,16 @@ static float personalMatrixA[SMOLATRIX][SMOLATRIX];
 static float personalMatrixB[SMOLATRIX][SMOLATRIX];
 static float personalMatrixC[SMOLATRIX][SMOLATRIX];
 
-static float sendBuffer_A[BIGATRIX];
-static float sendBuffer_B[BIGATRIX];
+// static float sendBuffer_A[BIGATRIX];
+// static float sendBuffer_B[BIGATRIX];
+
+// stworzenie potrzebnych zmiennych
+static float receivedA[SMOLATRIX][SMOLATRIX]; // gdzie bede odbierac
+static float receivedB[SMOLATRIX][SMOLATRIX];
+
+static float sequencerMatrix[WHOLEMATRIX][WHOLEMATRIX];
+
+// static float sendFirstA[500][500], sendFirstB[500][500];
 
 static float result[WHOLEMATRIX][WHOLEMATRIX];
 
@@ -113,69 +122,84 @@ void copyMatrix(float source[sizeOfMiniMatrix][sizeOfMiniMatrix], float destinat
     }
 }
 
-void sendFirstLocalMatrixForProcesses(int processNumber, float matrixA[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix],
-                                      float matrixB[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix])
+// void sendFirstLocalMatrixForProcesses(int processNumber, float matrixA[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix],
+//                                       float matrixB[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix])
+// {
+//     // Przygotowanie bufora do wysłania
+//     int helpMatrix[sizeOfMainMatrix][sizeOfMainMatrix]; // pomocnicza macierz ktora ma w swojej komorce numer procesu. Przesuwam sie po niej i odczytuje wartosc zeby wiedziec do jakiego procesu wysłać po przesunięciu
+//     int indeks = 0;
+
+//     for (int row = 0; row < sizeOfMainMatrix; row++)
+//     {
+//         for (int column = 0; column < sizeOfMainMatrix; column++)
+//         {
+//             helpMatrix[row][column] = indeks;
+//             indeks++;
+//         }
+//     }
+
+//     for (int processID = 1; processID < processNumber; processID++)
+//     {
+//         // Obliczenie indeksów początkowych wierszy dla danego procesu
+//         int startRow = (processID / sizeOfMainMatrix) * sizeOfMiniMatrix;
+//         int startColumn = (processID % sizeOfMainMatrix) * sizeOfMiniMatrix;
+//         int myRow = processID / sizeOfMainMatrix;
+//         int myColumn = processID % sizeOfMainMatrix;
+
+//         int leftNeighbor = helpMatrix[myRow][(sizeOfMainMatrix - myRow + myColumn) % sizeOfMainMatrix];
+//         int topNeighbor = helpMatrix[(sizeOfMainMatrix + myRow - myColumn) % sizeOfMainMatrix][myColumn];
+
+//         // Jeśli indeks kolumny jest równy 0, przesuwamy się na ostatnią kolumnę
+//         if (myColumn == 0)
+//         {
+//             topNeighbor = processID;
+//             leftNeighbor = helpMatrix[myRow][sizeOfMainMatrix - myRow];
+//         }
+
+//         if (myRow == 0) // procesow z rzedu 0 nie tykamy
+//         {
+//             leftNeighbor = processID;
+//             topNeighbor = helpMatrix[sizeOfMainMatrix - myColumn][myColumn];
+//         }
+
+//         int index = 0;
+
+//         // Wypełnienie bufora danymi z macierzy A i B dla danego procesu
+//         for (int row = startRow; row < startRow + sizeOfMiniMatrix; row++)
+//         {
+//             for (int col = startColumn; col < startColumn + sizeOfMiniMatrix; col++)
+//             {
+//                 sendBuffer_A[index] = matrixA[row][col];
+//                 sendBuffer_B[index] = matrixB[row][col];
+//                 index++;
+//             }
+//         }
+//         printf("Proces 0 wysylam do %d\n", leftNeighbor);
+//         MPI_Send(sendBuffer_A, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, leftNeighbor, 0, MPI_COMM_WORLD);
+//         printf("Proces 0 wyslal do %d\n", leftNeighbor);
+//         printf("Proces 0 wysylam do %d\n", topNeighbor);
+//         MPI_Send(sendBuffer_B, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, topNeighbor, 1, MPI_COMM_WORLD);
+//         printf("Proces 0 wyslal do %d\n", topNeighbor);
+//     }
+// }
+
+void cutRightPieceOfMatrix(int x, int y, float matrix[sizeOfMainMatrix * sizeOfMiniMatrix][sizeOfMainMatrix * sizeOfMiniMatrix], float result[sizeOfMiniMatrix][sizeOfMiniMatrix])
 {
-    // Przygotowanie bufora do wysłania
-    int helpMatrix[sizeOfMainMatrix][sizeOfMainMatrix]; // pomocnicza macierz ktora ma w swojej komorce numer procesu. Przesuwam sie po niej i odczytuje wartosc zeby wiedziec do jakiego procesu wysłać po przesunięciu
-    int indeks = 0;
-
-    for (int row = 0; row < sizeOfMainMatrix; row++)
+    for (int i = 0; i < sizeOfMiniMatrix; i++)
     {
-        for (int column = 0; column < sizeOfMainMatrix; column++)
+        for (int j = 0; j < sizeOfMiniMatrix; j++)
         {
-            helpMatrix[row][column] = indeks;
-            indeks++;
+            result[i][j] = matrix[x + i][y + j];
         }
-    }
-
-    for (int processID = 1; processID < processNumber; processID++)
-    {
-        // Obliczenie indeksów początkowych wierszy dla danego procesu
-        int startRow = (processID / sizeOfMainMatrix) * sizeOfMiniMatrix;
-        int startColumn = (processID % sizeOfMainMatrix) * sizeOfMiniMatrix;
-        int myRow = processID / sizeOfMainMatrix;
-        int myColumn = processID % sizeOfMainMatrix;
-
-        int leftNeighbor = helpMatrix[myRow][(sizeOfMainMatrix - myRow + myColumn) % sizeOfMainMatrix];
-        int topNeighbor = helpMatrix[(sizeOfMainMatrix + myRow - myColumn) % sizeOfMainMatrix][myColumn];
-
-        // Jeśli indeks kolumny jest równy 0, przesuwamy się na ostatnią kolumnę
-        if (myColumn == 0)
-        {
-            topNeighbor = processID;
-            leftNeighbor = helpMatrix[myRow][sizeOfMainMatrix - myRow];
-        }
-
-        if (myRow == 0) // procesow z rzedu 0 nie tykamy
-        {
-            leftNeighbor = processID;
-            topNeighbor = helpMatrix[sizeOfMainMatrix - myColumn][myColumn];
-        }
-
-        int index = 0;
-
-        // Wypełnienie bufora danymi z macierzy A i B dla danego procesu
-        for (int row = startRow; row < startRow + sizeOfMiniMatrix; row++)
-        {
-            for (int col = startColumn; col < startColumn + sizeOfMiniMatrix; col++)
-            {
-                sendBuffer_A[index] = matrixA[row][col];
-                sendBuffer_B[index] = matrixB[row][col];
-                index++;
-            }
-        }
-        printf("Proces 0 wysylam do %d\n", leftNeighbor);
-        MPI_Send(sendBuffer_A, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, leftNeighbor, 0, MPI_COMM_WORLD);
-        printf("Proces 0 wysylam do %d\n", topNeighbor);
-        MPI_Send(sendBuffer_B, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, topNeighbor, 1, MPI_COMM_WORLD);
     }
 }
 
 void shiftSendAndMultiply(int procesID, float personalMatrixA[sizeOfMiniMatrix][sizeOfMiniMatrix], float personalMatrixB[sizeOfMiniMatrix][sizeOfMiniMatrix],
                           float personalMatrixC[sizeOfMiniMatrix][sizeOfMiniMatrix])
 {
-    printf("Shift, send and multiply\n");
+    MPI_Request reqA[sizeOfMainMatrix * sizeOfMainMatrix * sizeOfMainMatrix], reqB[sizeOfMainMatrix * sizeOfMainMatrix * sizeOfMainMatrix];
+    MPI_Request reqSendA[sizeOfMainMatrix * sizeOfMainMatrix * sizeOfMainMatrix], reqSendB[sizeOfMainMatrix * sizeOfMainMatrix * sizeOfMainMatrix];
+
     // Tworzenie komunikatorów wiersza i kolumny
     MPI_Comm rowCommunicator;
     MPI_Comm colCommunicator;
@@ -186,13 +210,6 @@ void shiftSendAndMultiply(int procesID, float personalMatrixA[sizeOfMiniMatrix][
     int MyIDinRow, MyIDinColumn;
     MPI_Comm_rank(rowCommunicator, &MyIDinRow);    // przypisuje sobie identyfikator w rzedzie
     MPI_Comm_rank(colCommunicator, &MyIDinColumn); // w kolumnie
-
-    // stworzenie potrzebnych zmiennych
-    float receivedA[sizeOfMiniMatrix][sizeOfMiniMatrix]; // gdzie bede odbierac
-    float receivedB[sizeOfMiniMatrix][sizeOfMiniMatrix];
-
-    MPI_Request req1[sizeOfMiniMatrix], req2[sizeOfMiniMatrix];
-    MPI_Request reqS1[sizeOfMiniMatrix], reqS2[sizeOfMiniMatrix];
 
     char fileName[50];
 
@@ -205,16 +222,21 @@ void shiftSendAndMultiply(int procesID, float personalMatrixA[sizeOfMiniMatrix][
         int bottomNeigbor = (MyIDinColumn + 1) % sizeOfMainMatrix;
 
         // Wysyłanie i odbieranie wyników
-        MPI_Irecv(receivedA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, rightNeighbor, 0, rowCommunicator, &req1[step]);
-        MPI_Irecv(receivedB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, bottomNeigbor, 0, colCommunicator, &req2[step]);
-        MPI_Isend(personalMatrixA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, leftNeighbor, 0, rowCommunicator, &reqS1[step]);
-        MPI_Isend(personalMatrixB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, topNeighbor, 0, colCommunicator, &reqS2[step]);
+        printf("Jestem %d odebralam od %d iteracja %d\n", procesID, rightNeighbor, step);
+        MPI_Irecv(receivedA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, rightNeighbor, 0, rowCommunicator, &reqA[procesID + (sizeOfMainMatrix * step)]);
+        printf("Jestem %d odebralam od %d iteracja %d\n", procesID, bottomNeigbor, step);
+        MPI_Irecv(receivedB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, bottomNeigbor, 0, colCommunicator, &reqB[procesID + (sizeOfMainMatrix * step)]);
+
+        printf("Jestem %d, wysylam do %d iteracja %d\n", procesID, leftNeighbor, step);
+        MPI_Isend(personalMatrixA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, leftNeighbor, 0, rowCommunicator, &reqSendA[procesID + (sizeOfMainMatrix * step)]);
+        printf("Jestem %d, wysylam do %d iteracja %d\n", procesID, topNeighbor, step);
+        MPI_Isend(personalMatrixB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, topNeighbor, 0, colCommunicator, &reqSendB[procesID + (sizeOfMainMatrix * step)]);
 
         // Oczekiwanie na macierze
-        MPI_Wait(&req1[step], MPI_STATUS_IGNORE);
-        MPI_Wait(&req2[step], MPI_STATUS_IGNORE);
-        MPI_Wait(&reqS1[step], MPI_STATUS_IGNORE);
-        MPI_Wait(&reqS2[step], MPI_STATUS_IGNORE);
+        MPI_Wait(&reqA[procesID + (sizeOfMainMatrix * step)], MPI_STATUS_IGNORE);
+        MPI_Wait(&reqB[procesID + (sizeOfMainMatrix * step)], MPI_STATUS_IGNORE);
+        MPI_Wait(&reqSendA[procesID + (sizeOfMainMatrix * step)], MPI_STATUS_IGNORE);
+        MPI_Wait(&reqSendB[procesID + (sizeOfMainMatrix * step)], MPI_STATUS_IGNORE);
 
         copyMatrix(receivedA, personalMatrixA);
         copyMatrix(receivedB, personalMatrixB);
@@ -298,10 +320,22 @@ int main(int argc, char *argv[])
 
         readBothMatrixFromFile("Matrix_A.txt", "Matrix_B.txt", matrixA, matrixB);
 
-        getMatrixForProcess0(matrixA, personalMatrixA);
-        getMatrixForProcess0(matrixB, personalMatrixB);
+        // getMatrixForProcess0(matrixA, personalMatrixA);
+        // getMatrixForProcess0(matrixB, personalMatrixB);
 
-        sendFirstLocalMatrixForProcesses(size, matrixA, matrixB);
+        // sendFirstLocalMatrixForProcesses(size, matrixA, matrixB);
+        int i_to_send, j_to_send;
+        for (int k = 1; k < size; k++)
+        {
+            i_to_send = k / sizeOfMainMatrix; // wiersz
+            j_to_send = k % sizeOfMainMatrix; // kolumna
+            cutRightPieceOfMatrix(i_to_send * sizeOfMiniMatrix, ((j_to_send + i_to_send) % sizeOfMainMatrix) * sizeOfMiniMatrix, matrixA, personalMatrixA);
+            MPI_Send(personalMatrixA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, k, k, MPI_COMM_WORLD);
+            cutRightPieceOfMatrix(((i_to_send + j_to_send) % sizeOfMainMatrix) * sizeOfMiniMatrix, j_to_send * sizeOfMiniMatrix, matrixB, personalMatrixB);
+            MPI_Send(personalMatrixB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, k, k * 2, MPI_COMM_WORLD);
+        }
+        cutRightPieceOfMatrix(0, 0, matrixA, personalMatrixA);
+        cutRightPieceOfMatrix(0, 0, matrixB, personalMatrixB);
 
         double startTimer;
         startTimer = MPI_Wtime();
@@ -328,10 +362,16 @@ int main(int argc, char *argv[])
 
     else
     {
-        printf("Proces %d czekam na wiadomosc\n", rank);
-        MPI_Recv(&personalMatrixA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        printf("Proces %d odebralam pierwsza wiadomosc\n", rank);
-        MPI_Recv(&personalMatrixB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        // printf("Proces %d czekam na wiadomosc\n", rank);
+        // MPI_Recv(&personalMatrixA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        // printf("Proces %d odebralam pierwsza wiadomosc\n", rank);
+        // MPI_Recv(&personalMatrixB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        // printf("Proces %d odebralam druga wiadomosc\n", rank);
+
+        // printf("Proces %d czekam na wiadomosc\n", rank);
+        MPI_Recv(personalMatrixA, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, 0, rank, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        // printf("Proces %d odebralam pierwsza wiadomosc\n", rank);
+        MPI_Recv(personalMatrixB, sizeOfMiniMatrix * sizeOfMiniMatrix, MPI_FLOAT, 0, rank * 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         printf("Proces %d odebralam druga wiadomosc\n", rank);
 
         // mnozenie macierzy ktore zostaly odpowiednio przemieszczone juz podczas pierwszego rozeslania
