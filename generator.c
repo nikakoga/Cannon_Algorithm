@@ -4,10 +4,6 @@
 
 const int sizeOfMainMatrix = 4;
 const int sizeOfMiniMatrix = 500;
-int placeForOneNumber = 10;
-
-// float matrix_A[16][16];
-// float matrix_B[16][16];
 
 float matrix_A[2000][2000];
 float matrix_B[2000][2000];
@@ -37,7 +33,7 @@ void saveToFile(const char *fileName, float matrix[sizeOfMainMatrix * sizeOfMini
     {
         for (int column = 0; column < (sizeOfMiniMatrix * sizeOfMainMatrix); column++)
         {
-            fprintf(fileMatrix, "%10.1f", matrix[row][column]); //placeForOneNumber
+            fprintf(fileMatrix, "%10.1f", matrix[row][column]);
         }
         fprintf(fileMatrix, "\n");
     }

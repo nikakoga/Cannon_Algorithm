@@ -2,6 +2,7 @@
 #include <mpi.h>
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 
 #define MATRIX_SIZE 2000
 #define PARTIAL_MATRIX_SIZE 500
@@ -16,16 +17,15 @@ static int process_count = (MATRIX_SIZE / PARTIAL_MATRIX_SIZE) * (MATRIX_SIZE / 
 // Main matrices
 static float A_matrix[MATRIX_SIZE][MATRIX_SIZE];
 static float B_matrix[MATRIX_SIZE][MATRIX_SIZE];
-static float result_matrix_C[MATRIX_SIZE][MATRIX_SIZE];
+static float result[MATRIX_SIZE][MATRIX_SIZE];
 
 // Local and received matrices
-static float local_matrix_A[PARTIAL_MATRIX_SIZE][PARTIAL_MATRIX_SIZE], local_matrix_B[PARTIAL_MATRIX_SIZE][PARTIAL_MATRIX_SIZE];
-static float received_matrix_A[PARTIAL_MATRIX_SIZE][PARTIAL_MATRIX_SIZE], received_matrix_B[PARTIAL_MATRIX_SIZE][PARTIAL_MATRIX_SIZE];
-static float local_matrix_C[PARTIAL_MATRIX_SIZE][PARTIAL_MATRIX_SIZE];
-static float received_matrix_C[PARTIAL_MATRIX_SIZE][PARTIAL_MATRIX_SIZE];
+static float local_matrix_A[PARTIAL_MATRIX_SIZE][PARTIAL_MATRIX_SIZE], local_matrix_B[PARTIAL_MATRIX_SIZE][PARTIAL_MATRIX_SIZE], local_matrix_C[PARTIAL_MATRIX_SIZE][PARTIAL_MATRIX_SIZE];
+static float received_matrix_A[PARTIAL_MATRIX_SIZE][PARTIAL_MATRIX_SIZE], received_matrix_B[PARTIAL_MATRIX_SIZE][PARTIAL_MATRIX_SIZE], received_matrix_C[PARTIAL_MATRIX_SIZE][PARTIAL_MATRIX_SIZE];
 
 // Initial matrices to be sent to processes
 static float inital_matrix_A[PARTIAL_MATRIX_SIZE][PARTIAL_MATRIX_SIZE], inital_matrix_B[PARTIAL_MATRIX_SIZE][PARTIAL_MATRIX_SIZE];
+static float sequencerMatrix[MATRIX_SIZE][MATRIX_SIZE];
 
 void read_initial_matrices()
 {
@@ -44,7 +44,7 @@ void read_initial_matrices()
     fclose(file_matrix_B);
 }
 
-void get_part_of_matrix(int row_offset, int col_offset, float matrix[MATRIX_SIZE][MATRIX_SIZE], float result[PARTIAL_MATRIX_SIZE][PARTIAL_MATRIX_SIZE])
+void cut_right_part_of_matrix(int row_offset, int col_offset, float matrix[MATRIX_SIZE][MATRIX_SIZE], float result[PARTIAL_MATRIX_SIZE][PARTIAL_MATRIX_SIZE])
 {
     for (int row = 0; row < PARTIAL_MATRIX_SIZE; row++)
     {
@@ -61,17 +61,17 @@ void send_matrices_to_processes()
     {
         int row_part = process_id / process_matrix_dimension;
         int col_part = process_id % process_matrix_dimension;
-        get_part_of_matrix(row_part * PARTIAL_MATRIX_SIZE, ((col_part + row_part) % process_matrix_dimension) * PARTIAL_MATRIX_SIZE, A_matrix, inital_matrix_A);
+        cut_right_part_of_matrix(row_part * PARTIAL_MATRIX_SIZE, ((col_part + row_part) % process_matrix_dimension) * PARTIAL_MATRIX_SIZE, A_matrix, inital_matrix_A);
         MPI_Send(inital_matrix_A, PARTIAL_MATRIX_SIZE * PARTIAL_MATRIX_SIZE, MPI_FLOAT, process_id, process_id, MPI_COMM_WORLD);
-        get_part_of_matrix(((row_part + col_part) % process_matrix_dimension) * PARTIAL_MATRIX_SIZE, col_part * PARTIAL_MATRIX_SIZE, B_matrix, inital_matrix_B);
+        cut_right_part_of_matrix(((row_part + col_part) % process_matrix_dimension) * PARTIAL_MATRIX_SIZE, col_part * PARTIAL_MATRIX_SIZE, B_matrix, inital_matrix_B);
         MPI_Send(inital_matrix_B, PARTIAL_MATRIX_SIZE * PARTIAL_MATRIX_SIZE, MPI_FLOAT, process_id, process_id * 2, MPI_COMM_WORLD);
     }
 }
 
 void set_initial_local_matrices()
 {
-    get_part_of_matrix(0, 0, A_matrix, local_matrix_A);
-    get_part_of_matrix(0, 0, B_matrix, local_matrix_B);
+    cut_right_part_of_matrix(0, 0, A_matrix, local_matrix_A);
+    cut_right_part_of_matrix(0, 0, B_matrix, local_matrix_B);
 }
 
 void receive_matrices(int process_id)
@@ -108,12 +108,9 @@ void reassign_calculated_to_local()
 
 void multiply_iteratively(int process_id, MPI_Comm row_communicator, MPI_Comm col_communicator)
 {
-    //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    MPI_Request req1[process_count * process_matrix_dimension], req2[process_count * process_matrix_dimension];
-    MPI_Request reqS1[process_count * process_matrix_dimension], reqS2[process_count * process_matrix_dimension];
-    // imo w tej formie w jakiej zrobila to magda jest to bez sensu,
-    // skoro kazdy proces uruchamiajac te funkcje stworzy swoja tablice requestow to
-    // totalnie wystarczy aby jej rozmiar wynosil [liczba iteracji = liczba rzedow macierzy procesow]
+    MPI_Request req1[process_matrix_dimension], req2[process_matrix_dimension];
+    MPI_Request reqS1[process_matrix_dimension], reqS2[process_matrix_dimension];
+
     int my_row_Id, my_col_Id;
     for (int shift_num = 0; shift_num < process_matrix_dimension; shift_num++)
     {
@@ -129,25 +126,30 @@ void multiply_iteratively(int process_id, MPI_Comm row_communicator, MPI_Comm co
         float bufsize = MATRIX_SIZE * MATRIX_SIZE / process_matrix_dimension / process_matrix_dimension;
 
         // Receive calculated matrices
-        printf("receiving from right %d in %d\n", right_neighbor, process_id);
-        MPI_Irecv(received_matrix_A, bufsize, MPI_FLOAT, right_neighbor, 0, row_communicator, &req1[process_id + (process_matrix_dimension * shift_num)]);
-        printf("receiving from bottom left %d in %d\n", bottom_neigbor, process_id);
-        MPI_Irecv(received_matrix_B, bufsize, MPI_FLOAT, bottom_neigbor, 0, col_communicator, &req2[process_id + (process_matrix_dimension * shift_num)]);
+        //printf("receiving from right %d in %d\n", right_neighbor, process_id);
+        MPI_Irecv(received_matrix_A, bufsize, MPI_FLOAT, right_neighbor, 0, row_communicator, &req1[shift_num]);
+        //printf("receiving from bottom left %d in %d\n", bottom_neigbor, process_id);
+        MPI_Irecv(received_matrix_B, bufsize, MPI_FLOAT, bottom_neigbor, 0, col_communicator, &req2[shift_num]);
 
         // Send calculated matrices
-        printf("sending to left %d from %d\n", left_neighbor, process_id);
-        MPI_Isend(local_matrix_A, bufsize, MPI_FLOAT, left_neighbor, 0, row_communicator, &reqS1[process_id + (process_matrix_dimension * shift_num)]);
-        printf("sending to top %d from %d\n", top_neighbor, process_id);
-        MPI_Isend(local_matrix_B, bufsize, MPI_FLOAT, top_neighbor, 0, col_communicator, &reqS2[process_id + (process_matrix_dimension * shift_num)]);
+        //printf("sending to left %d from %d\n", left_neighbor, process_id);
+        MPI_Isend(local_matrix_A, bufsize, MPI_FLOAT, left_neighbor, 0, row_communicator, &reqS1[shift_num]);
+        //printf("sending to top %d from %d\n", top_neighbor, process_id);
+        MPI_Isend(local_matrix_B, bufsize, MPI_FLOAT, top_neighbor, 0, col_communicator, &reqS2[shift_num]);
 
+        //printf("Process %d waiting for matrices\n", process_id);
         // Wait for matrices
-        MPI_Wait(&req1[process_id + (process_matrix_dimension * shift_num)], MPI_STATUS_IGNORE);
-        MPI_Wait(&req2[process_id + (process_matrix_dimension * shift_num)], MPI_STATUS_IGNORE);
-        MPI_Wait(&reqS1[process_id + (process_matrix_dimension * shift_num)], MPI_STATUS_IGNORE);
-        MPI_Wait(&reqS2[process_id + (process_matrix_dimension * shift_num)], MPI_STATUS_IGNORE);
+        MPI_Wait(&req1[shift_num], MPI_STATUS_IGNORE);
+        MPI_Wait(&req2[shift_num], MPI_STATUS_IGNORE);
+        MPI_Wait(&reqS1[shift_num], MPI_STATUS_IGNORE);
+        MPI_Wait(&reqS2[shift_num], MPI_STATUS_IGNORE);
+        //printf("Process %d finished waiting for matrices\n", process_id);
 
+        //printf("Process %d reassigning calculated to local\n", process_id);
         reassign_calculated_to_local();
+        //printf("Process %d reassigned calculated to local\n", process_id);
     }
+    //printf("Process %d finished multiplying\n", process_id);
 }
 
 void multiply_matrices(int process_id)
@@ -180,9 +182,51 @@ void save_to_result(int x, int y, float matrix[PARTIAL_MATRIX_SIZE][PARTIAL_MATR
     {
         for (int j = 0; j < PARTIAL_MATRIX_SIZE; j++)
         {
-            result_matrix_C[x + i][y + j] = matrix[i][j];
+            result[x + i][y + j] = matrix[i][j];
         }
     }
+}
+
+void check_result_with_sequencer()
+{
+    FILE *sequencerFile = fopen("ResultFromSequencer.txt", "r");
+
+    for (int row = 0; row < MATRIX_SIZE; row++)
+    {
+        for (int col = 0; col < MATRIX_SIZE; col++)
+        {
+            fscanf(sequencerFile, "%f", &sequencerMatrix[row][col]);
+        }
+    }
+    // Sprawdzenie poprawności
+
+    for (int row = 0; row < MATRIX_SIZE; row++)
+    {
+        for (int col = 0; col < MATRIX_SIZE; col++)
+        {
+            if (fabs(sequencerMatrix[row][col] - result[row][col]) >= 0.1 * sequencerMatrix[row][col])
+            {
+                printf("Wynik niepoprawny\n");
+                return;
+            }
+        }
+    }
+    printf("Wynik poprawny!\n");
+    fclose(sequencerFile);
+}
+
+void write_result_to_file()
+{
+    FILE *matrixC_MPI_file = fopen("ResultFromCanon.txt", "w");
+    for (int row = 0; row < MATRIX_SIZE; row++)
+    {
+        for (int col = 0; col < MATRIX_SIZE; col++)
+        {
+            fprintf(matrixC_MPI_file, "%10.1f ", result[row][col]);
+        }
+        fprintf(matrixC_MPI_file, "\n");
+    }
+    fclose(matrixC_MPI_file);
 }
 
 int handle_child_communication(int process_id)
@@ -192,7 +236,9 @@ int handle_child_communication(int process_id)
     multiply_matrices(process_id);
 
     // Send calculated matrix C to main proc
+    //printf("Process %d sending to main\n", process_id);
     MPI_Send(local_matrix_C, PARTIAL_MATRIX_SIZE * PARTIAL_MATRIX_SIZE, MPI_FLOAT, MAIN_PROCESS_ID, process_id, MPI_COMM_WORLD);
+    //printf("Process %d sent to main\n", process_id);
     return 0;
 }
 
@@ -204,67 +250,34 @@ int handle_main_communication()
     send_matrices_to_processes();
     set_initial_local_matrices();
 
+    double startTimer;
+    startTimer = MPI_Wtime();
+
     multiply_matrices(MAIN_PROCESS_ID);
 
     int process_matrix_row, process_matrix_col;
+
+    //printf("Process %d starts saving result\n", MAIN_PROCESS_ID);
     save_to_result(0, 0, local_matrix_C);
     for (int process_id = 1; process_id < process_count; process_id++)
     {
+
+        //printf("Main process receving from %d\n", process_id);
         process_matrix_row = process_id / process_matrix_dimension;
         process_matrix_col = process_id % process_matrix_dimension;
         MPI_Recv(received_matrix_C, PARTIAL_MATRIX_SIZE * PARTIAL_MATRIX_SIZE, MPI_FLOAT, process_id, process_id, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        //printf("Main process receving from %d\n", process_id);
+        //printf("Main process saving from %d\n", process_id);
         save_to_result(process_matrix_row * PARTIAL_MATRIX_SIZE, process_matrix_col * PARTIAL_MATRIX_SIZE, received_matrix_C);
+        //printf("Main process saved from %d\n", process_id);
     }
 
-    // endwtime = MPI_Wtime();
-    // printf("Czas odczytu pliku = %f\n", endwtime2 - startwtime1);
-    // printf("Czas przetwarzania = %f\n", endwtime - startwtime1);
-    // printf("Czas obliczen = %f\n", endwtime - startwtime2);
+    double endTimer;
+    endTimer = MPI_Wtime();
 
-    // Zapis wyniku do pliku
-    FILE *matrixC_MPI_file = fopen("wynikAB_MPI_2004_2.txt", "w");
-    for (int k = 0; k < MATRIX_SIZE; k++)
-    {
-        for (int l = 0; l < MATRIX_SIZE; l++)
-        {
-            fprintf(matrixC_MPI_file, "%6.1f ", result_matrix_C[k][l]);
-        }
-        fprintf(matrixC_MPI_file, "\n");
-    }
-    fclose(matrixC_MPI_file);
-    // Wczytanie wyniku sekwencyjnego
-    FILE *matrixC_s_file = fopen("wynikAB_sekwencyjny_2004_2.txt", "r");
-    for (int k = 0; k < MATRIX_SIZE; k++)
-    {
-        for (int l = 0; l < MATRIX_SIZE; l++)
-        {
-            fscanf(matrixC_s_file, "%f", &inital_matrix_A[k][l]);
-        }
-    }
-    // Sprawdzenie poprawności
-    int correct_result = 1;
-    for (int k = 0; k < MATRIX_SIZE; k++)
-    {
-        for (int l = 0; l < MATRIX_SIZE; l++)
-        {
-            if (result_matrix_C[k][l] / inital_matrix_A[k][l] >= 1.1 || result_matrix_C[k][l] / inital_matrix_A[k][l] <= 0.9)
-            {
-                correct_result = 0;
-                printf("%d %d %f %f\n", k, l, result_matrix_C[k][l], inital_matrix_A[k][l]);
-            }
-        }
-    }
+    printf("Czas obliczen = %f\n", endTimer - startTimer);
 
-    if (correct_result == 1)
-    {
-        printf("Wynik poprawny.\n");
-        return 0;
-    }
-    else
-    {
-        printf("Wynik nieprawidłowy.\n");
-        return 0;
-    }
+    check_result_with_sequencer();
 }
 
 int main(int argc, char *argv[])

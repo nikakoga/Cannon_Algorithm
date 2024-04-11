@@ -6,7 +6,6 @@
 const int sizeOfMainMatrix = 4;
 const int sizeOfMiniMatrix = 500;
 #define MINISIZE 2000
-const int placeForOneNumber = 6;
 
 float matrixA[MINISIZE][MINISIZE];
 float matrixB[MINISIZE][MINISIZE];
@@ -49,7 +48,7 @@ void saveMatrixToFile(const char *fileName, float wholeMatrix[sizeOfMiniMatrix *
     {
         for (int column = 0; column < (sizeOfMiniMatrix * sizeOfMainMatrix); column++)
         {
-            fprintf(fileMatrix, "%10.1f", wholeMatrix[row][column]); // placeForOneNumber
+            fprintf(fileMatrix, "%10.1f", wholeMatrix[row][column]);
         }
         fprintf(fileMatrix, "\n");
     }
